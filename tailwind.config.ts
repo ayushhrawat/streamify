@@ -60,8 +60,11 @@ const config = {
 				"green-chat": "hsl(var(--green-chat))",
 			},
 			backgroundImage: {
-				"chat-tile-light": "url('/bg-light.png')",
-				"chat-tile-dark": "url('/bg-dark.png')",
+				"chat-tile-light": "linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%)",
+				"chat-tile-dark": "linear-gradient(135deg, #1a202c 0%, #2d3748 100%)",
+				"hero-gradient": "linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)",
+				"chat-pattern-light": "radial-gradient(circle at 20% 50%, rgba(59, 130, 246, 0.05) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.05) 0%, transparent 50%), radial-gradient(circle at 40% 80%, rgba(139, 92, 246, 0.05) 0%, transparent 50%)",
+				"chat-pattern-dark": "radial-gradient(circle at 20% 50%, rgba(255, 107, 107, 0.15) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(238, 90, 36, 0.15) 0%, transparent 50%), radial-gradient(circle at 40% 80%, rgba(255, 159, 67, 0.15) 0%, transparent 50%)",
 			},
 			borderRadius: {
 				lg: "var(--radius)",

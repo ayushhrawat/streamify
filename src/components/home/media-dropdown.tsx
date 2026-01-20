@@ -1,52 +1,53 @@
 import { useEffect, useRef, useState } from "react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "../ui/dropdown-menu";
-import { ImageIcon, Plus, Video } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription } from "../ui/dialog";
+import { ImageIcon, Plus, Video, Bot, Palette } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
 import Image from "next/image";
 import ReactPlayer from "react-player";
 import toast from "react-hot-toast";
-import { useMutation, useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
 import { useConversationStore } from "@/store/chat-store";
+import { useSendMessage } from "@/hooks/use-messages";
+import { useSupabase } from "@/providers/supabase-provider";
+import { useConversationUpdates } from "@/hooks/use-conversation-updates";
+import { useAIAssistant } from "@/hooks/use-ai-assistant";
+import { useImageGeneration } from "@/hooks/use-image-generation";
 
 const MediaDropdown = () => {
 	const imageInput = useRef<HTMLInputElement>(null);
 	const videoInput = useRef<HTMLInputElement>(null);
 	const [selectedImage, setSelectedImage] = useState<File | null>(null);
 	const [selectedVideo, setSelectedVideo] = useState<File | null>(null);
+	const [showAIDialog, setShowAIDialog] = useState(false);
+	const [aiQuestion, setAiQuestion] = useState("");
+	const [showImageGenDialog, setShowImageGenDialog] = useState(false);
+	const [imagePrompt, setImagePrompt] = useState("");
 
 	const [isLoading, setIsLoading] = useState(false);
 
-	const generateUploadUrl = useMutation(api.conversations.generateUploadUrl);
-	const sendImage = useMutation(api.messages.sendImage);
-	const sendVideo = useMutation(api.messages.sendVideo);
-	const me = useQuery(api.users.getMe);
-
 	const { selectedConversation } = useConversationStore();
+	const { sendImageMessage, sendVideoMessage, loading: sendLoading } = useSendMessage();
+	const { currentUser } = useSupabase();
+	const { triggerUpdate } = useConversationUpdates();
+
+	// Use AI assistant and image generation hooks
+	const { askAI, isGenerating: isAskingAI } = useAIAssistant();
+	const { generateImage, isGenerating: isGeneratingImage } = useImageGeneration();
 
 	const handleSendImage = async () => {
+		if (!selectedImage || !selectedConversation || !currentUser) return;
+		
 		setIsLoading(true);
 		try {
-			// Step 1: Get a short-lived upload URL
-			const postUrl = await generateUploadUrl();
-			// Step 2: POST the file to the URL
-			const result = await fetch(postUrl, {
-				method: "POST",
-				headers: { "Content-Type": selectedImage!.type },
-				body: selectedImage,
+			await sendImageMessage({
+				conversationId: selectedConversation.id || selectedConversation._id,
+				imageFile: selectedImage
 			});
-
-			const { storageId } = await result.json();
-			// Step 3: Save the newly allocated storage id to the database
-			await sendImage({
-				conversation: selectedConversation!._id,
-				imgId: storageId,
-				sender: me!._id,
-			});
-
 			setSelectedImage(null);
+			toast.success("Image sent successfully!");
 		} catch (err) {
+			console.error('Error sending image:', err);
 			toast.error("Failed to send image");
 		} finally {
 			setIsLoading(false);
@@ -54,27 +55,45 @@ const MediaDropdown = () => {
 	};
 
 	const handleSendVideo = async () => {
+		if (!selectedVideo || !selectedConversation || !currentUser) return;
+		
 		setIsLoading(true);
 		try {
-			const postUrl = await generateUploadUrl();
-			const result = await fetch(postUrl, {
-				method: "POST",
-				headers: { "Content-Type": selectedVideo!.type },
-				body: selectedVideo,
+			await sendVideoMessage({
+				conversationId: selectedConversation.id || selectedConversation._id,
+				videoFile: selectedVideo
 			});
-
-			const { storageId } = await result.json();
-
-			await sendVideo({
-				videoId: storageId,
-				conversation: selectedConversation!._id,
-				sender: me!._id,
-			});
-
 			setSelectedVideo(null);
+			toast.success("Video sent successfully!");
 		} catch (error) {
+			console.error('Error sending video:', error);
+			toast.error("Failed to send video");
 		} finally {
 			setIsLoading(false);
+		}
+	};
+
+	// Function to ask AI using the hook
+	const handleAskAI = async () => {
+		if (!aiQuestion.trim()) return;
+		
+		const success = await askAI(aiQuestion.trim());
+		if (success) {
+			// Close dialog and reset
+			setShowAIDialog(false);
+			setAiQuestion("");
+		}
+	};
+
+	// Function to generate AI image using the hook
+	const handleGenerateImage = async () => {
+		if (!imagePrompt.trim()) return;
+		
+		const success = await generateImage(imagePrompt.trim());
+		if (success) {
+			// Close dialog and reset
+			setShowImageGenDialog(false);
+			setImagePrompt("");
 		}
 	};
 
@@ -116,6 +135,111 @@ const MediaDropdown = () => {
 				/>
 			)}
 
+			{/* AI Dialog */}
+			<Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<Bot className="text-blue-600" size={20} />
+							Ask AI Assistant
+						</DialogTitle>
+					</DialogHeader>
+					<DialogDescription className="space-y-4">
+						<div>
+							<Input
+								placeholder="What would you like to ask the AI?"
+								value={aiQuestion}
+								onChange={(e) => setAiQuestion(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' && !e.shiftKey) {
+										e.preventDefault();
+										handleAskAI();
+									}
+								}}
+								className="w-full"
+							/>
+						</div>
+						<div className="flex justify-end gap-2">
+							<Button 
+								variant="outline" 
+								onClick={() => {
+									setShowAIDialog(false);
+									setAiQuestion("");
+								}}
+							>
+								Cancel
+							</Button>
+							<Button 
+								onClick={handleAskAI}
+								disabled={!aiQuestion.trim() || isAskingAI}
+								className="bg-blue-600 hover:bg-blue-700"
+							>
+								{isAskingAI ? (
+									<div className='w-4 h-4 border-t-2 border-b-2 border-white rounded-full animate-spin mr-2' />
+								) : (
+									<Bot size={16} className="mr-2" />
+								)}
+								Ask AI
+							</Button>
+						</div>
+					</DialogDescription>
+				</DialogContent>
+			</Dialog>
+
+			{/* Image Generation Dialog */}
+			<Dialog open={showImageGenDialog} onOpenChange={setShowImageGenDialog}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle className="flex items-center gap-2">
+							<Palette className="text-purple-600" size={20} />
+							Generate AI Image
+						</DialogTitle>
+					</DialogHeader>
+					<DialogDescription className="space-y-4">
+						<div>
+							<Input
+								placeholder="Describe the image you want to generate..."
+								value={imagePrompt}
+								onChange={(e) => setImagePrompt(e.target.value)}
+								onKeyDown={(e) => {
+									if (e.key === 'Enter' && !e.shiftKey) {
+										e.preventDefault();
+										handleGenerateImage();
+									}
+								}}
+								className="w-full"
+							/>
+							<p className="text-xs text-gray-500 mt-2">
+								Example: "A beautiful sunset over mountains", "A cute cat wearing sunglasses"
+							</p>
+						</div>
+						<div className="flex justify-end gap-2">
+							<Button 
+								variant="outline" 
+								onClick={() => {
+									setShowImageGenDialog(false);
+									setImagePrompt("");
+								}}
+							>
+								Cancel
+							</Button>
+							<Button 
+								onClick={handleGenerateImage}
+								disabled={!imagePrompt.trim() || isGeneratingImage}
+								className="bg-purple-600 hover:bg-purple-700"
+							>
+								{isGeneratingImage ? (
+									<div className='w-4 h-4 border-t-2 border-b-2 border-white rounded-full animate-spin mr-2' />
+								) : (
+									<Palette size={16} className="mr-2" />
+								)}
+								Generate Image
+							</Button>
+						</div>
+					</DialogDescription>
+				</DialogContent>
+			</Dialog>
+
 			<DropdownMenu>
 				<DropdownMenuTrigger>
 					<Plus className='text-gray-600 dark:text-gray-400' />
@@ -128,6 +252,14 @@ const MediaDropdown = () => {
 					<DropdownMenuItem onClick={() => videoInput.current!.click()}>
 						<Video size={20} className='mr-1' />
 						Video
+					</DropdownMenuItem>
+					<DropdownMenuItem onClick={() => setShowImageGenDialog(true)}>
+						<Palette size={18} className='mr-1 text-purple-600' />
+						Generate Image
+					</DropdownMenuItem>
+					<DropdownMenuItem onClick={() => setShowAIDialog(true)}>
+						<Bot size={18} className='mr-1 text-blue-600' />
+						Ask AI
 					</DropdownMenuItem>
 				</DropdownMenuContent>
 			</DropdownMenu>
@@ -165,7 +297,7 @@ const MediaImageDialog = ({ isOpen, onClose, selectedImage, isLoading, handleSen
 				<DialogDescription className='flex flex-col gap-10 justify-center items-center'>
 					{renderedImage && <Image src={renderedImage} width={300} height={300} alt='selected image' />}
 					<Button className='w-full' disabled={isLoading} onClick={handleSendImage}>
-						{isLoading ? "Sending..." : "Send"}
+						Send
 					</Button>
 				</DialogDescription>
 			</DialogContent>
@@ -197,7 +329,7 @@ const MediaVideoDialog = ({ isOpen, onClose, selectedVideo, isLoading, handleSen
 					{renderedVideo && <ReactPlayer url={renderedVideo} controls width='100%' />}
 				</div>
 				<Button className='w-full' disabled={isLoading} onClick={handleSendVideo}>
-					{isLoading ? "Sending..." : "Send"}
+					Send
 				</Button>
 			</DialogContent>
 		</Dialog>

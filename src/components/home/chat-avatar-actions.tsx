@@ -1,9 +1,9 @@
 import { IMessage, useConversationStore } from "@/store/chat-store";
-import { useMutation } from "convex/react";
 import { Ban, LogOut } from "lucide-react";
 import toast from "react-hot-toast";
-import { api } from "../../../convex/_generated/api";
 import React from "react";
+import { useKickUser } from "@/hooks/use-users";
+import { useCreateConversation } from "@/hooks/use-conversations";
 
 type ChatAvatarActionsProps = {
 	message: IMessage;
@@ -12,50 +12,61 @@ type ChatAvatarActionsProps = {
 
 const ChatAvatarActions = ({ me, message }: ChatAvatarActionsProps) => {
 	const { selectedConversation, setSelectedConversation } = useConversationStore();
+	const { kickUser, loading: kickLoading } = useKickUser();
+	const { createConversation, loading: createLoading } = useCreateConversation();
 
 	const isMember = selectedConversation?.participants.includes(message.sender._id);
-	const kickUser = useMutation(api.conversations.kickUser);
-	const createConversation = useMutation(api.conversations.createConversation);
-	const fromAI = message.sender?.name === "ChatGPT";
+	const fromAI = message.sender?.name === "ChatGPT" || message.sender?.name === "AI Assistant";
 	const isGroup = selectedConversation?.isGroup;
 
 	const handleKickUser = async (e: React.MouseEvent) => {
-		if (fromAI) return;
+		if (fromAI || kickLoading) return;
 		e.stopPropagation();
 		if (!selectedConversation) return;
+		
 		try {
 			await kickUser({
-				conversationId: selectedConversation._id,
-				userId: message.sender._id,
+				conversationId: selectedConversation.id || selectedConversation._id,
+				userId: message.sender._id
 			});
-
+			
 			setSelectedConversation({
 				...selectedConversation,
 				participants: selectedConversation.participants.filter((id) => id !== message.sender._id),
 			});
+			
+			toast.success("User removed from group");
 		} catch (error) {
-			toast.error("Failed to kick user");
+			console.error('Error kicking user:', error);
+			toast.error("Failed to remove user");
 		}
 	};
 
 	const handleCreateConversation = async () => {
-		if (fromAI) return;
+		if (fromAI || createLoading) return;
 
 		try {
 			const conversationId = await createConversation({
-				isGroup: false,
-				participants: [me._id, message.sender._id],
+				participants: [message.sender._id],
+				isGroup: false
 			});
-
+			
 			setSelectedConversation({
+				id: conversationId,
 				_id: conversationId,
-				name: message.sender.name,
-				participants: [me._id, message.sender._id],
+				participants: [me._id || me.id, message.sender._id],
+				is_group: false,
 				isGroup: false,
-				isOnline: message.sender.isOnline,
+				name: message.sender.name,
 				image: message.sender.image,
+				isOnline: message.sender.isOnline,
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
 			});
+			
+			toast.success("Conversation created!");
 		} catch (error) {
+			console.error('Error creating conversation:', error);
 			toast.error("Failed to create conversation");
 		}
 	};
