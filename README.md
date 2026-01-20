@@ -1,10 +1,12 @@
+# streamify
+>>>>>>> 1874d33f3b1f4f5063dee262fcf28ea762cbc48b
 <a href="https://youtu.be/sQ1zvdS8eU8">
   <img alt="AI-powered WhatsApp." src="https://i.ibb.co/YcWpZ5F/Screenshot-24.png">
   <h1 align="center">Streamify - AI Powered Messaging</h1>
 </a>
 
 <p align="center">
- Make WhatsApp a little bit more exiciting by integratin GPT and DALL-E-3 
+ Make WhatsApp a little bit more exciting by integrating GPT and DALL-E-3 
 </p>
 
 <p align="center">
@@ -47,3 +49,6 @@ You can deploy this app by setting up the following services and adding their en
 ## Thanks for your support
 
 -   Like && Subscribe for more projects like this
+=======
+# streamify
+>>>>>>> 1874d33f3b1f4f5063dee262fcf28ea762cbc48b
